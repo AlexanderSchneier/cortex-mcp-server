@@ -3,8 +3,20 @@ from fastapi.responses import JSONResponse
 from tinydb import TinyDB
 import fitz  # PyMuPDF for PDF parsing
 import re, os
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify ["http://localhost:3000/", "https://your-frontend.vercel.app/"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+
 
 # Database file inside Vercel's temp directory
 db_path = "/tmp/mcp_db.json"
