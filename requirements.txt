@@ -1,2 +1,4 @@
 fastapi
 python-multipart
+tinydb
+pymupdf
