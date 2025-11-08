@@ -137,18 +137,21 @@ async def query_collection(request: Request):
     try:
         data = await request.json()
         question = data.get("question", "").lower()
-        max_results = data.get("max_results", 5)
+        max_results = data.get("max_results", 8)  # Default to 8 for better coverage
 
-        # Simple keyword-based retrieval
+        # Improved keyword extraction: filter out short words and punctuation
+        keywords = [w.strip(".,?!;:") for w in question.split() if len(w.strip(".,?!;:")) > 2]
+
+        # Simple keyword-based retrieval with citation metadata
         all_chunks = chunks_table.all()
-        results = []
         
-        question_words = question.split()
+        # Track results per document for better coverage
+        doc_results = {}
         
         for chunk in all_chunks:
             chunk_text = chunk.get("text", "").lower()
             # Count keyword matches for relevance scoring
-            score = sum(1 for word in question_words if word in chunk_text)
+            score = sum(1 for word in keywords if word in chunk_text)
             
             if score > 0:
                 doc_id = chunk.get("document_id")
@@ -156,7 +159,7 @@ async def query_collection(request: Request):
                 Doc = Query()
                 doc_info = documents_table.get(Doc.document_id == doc_id) or {}
                 
-                results.append({
+                result_item = {
                     "chunk_id": chunk.get("chunk_id"),
                     "text": chunk.get("text"),
                     "document_id": doc_id,
@@ -171,14 +174,27 @@ async def query_collection(request: Request):
                         "location": f"Page {chunk.get('page_num')}, Chunk {chunk.get('chunk_index')}",
                         "chunk_id": chunk.get("chunk_id")
                     }
-                })
+                }
+                
+                # Group by document for better coverage
+                if doc_id not in doc_results:
+                    doc_results[doc_id] = []
+                doc_results[doc_id].append(result_item)
         
-        # Sort by relevance score
-        results.sort(key=lambda x: x["relevance_score"], reverse=True)
+        # Take top 2 matches per document to ensure coverage, then sort all by score
+        all_results = []
+        for doc_id, doc_chunks in doc_results.items():
+            # Sort chunks for this document by score
+            doc_chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
+            # Take top 2 per document
+            all_results.extend(doc_chunks[:2])
+        
+        # Sort all results by relevance score
+        all_results.sort(key=lambda x: x["relevance_score"], reverse=True)
         
         # Format results with citation-ready metadata
         formatted_results = []
-        for r in results[:max_results]:
+        for r in all_results[:max_results]:
             formatted_results.append({
                 "chunk_id": r["chunk_id"],
                 "text": r["text"],
@@ -195,8 +211,7 @@ async def query_collection(request: Request):
         return JSONResponse({
             "chunks": formatted_results,
             "citations": citations_map,
-            "total_matches": len(results)
+            "total_matches": len(all_results)
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
