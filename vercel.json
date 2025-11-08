@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 2,
   "routes": [
     { "src": "/mcp/query_collection", "dest": "/api/query_collection.py" },
     { "src": "/.*", "dest": "/api/index.py" }
