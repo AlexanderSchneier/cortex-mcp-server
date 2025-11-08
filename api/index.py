@@ -49,26 +49,29 @@ async def ingest(file: UploadFile = File(...)):
 # --- 2️⃣  Query Route: retrieve relevant text chunks ---
 @app.post("/mcp/query_collection")
 async def query_collection(request: Request):
-    try:
-        data = await request.json()
-        question = data.get("question", "").lower()
+    data = await request.json()
+    question = data.get("question", "").lower()
+    keywords = [w.strip(".,?") for w in question.split() if len(w) > 2]
 
-        # Simple keyword-based retrieval
-        docs = db.all()
-        results = []
-        for d in docs:
-            text = d["text"]
-            # Split text into small paragraphs
-            chunks = re.split(r"\n\s*\n", text)
-            for c in chunks:
-                if any(word in c.lower() for word in question.split()):
-                    results.append(c.strip())
+    docs = db.all()
+    results = []
 
-        if not results:
-            return JSONResponse({"chunks": []})
+    for d in docs:
+        text = d["text"]
+        chunks = re.split(r"\n\s*\n", text)
+        doc_hits = []
 
-        # Return top 3 relevant chunks
-        return JSONResponse({"chunks": results[:3]})
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        for c in chunks:
+            lowered = c.lower()
+            if any(w in lowered for w in keywords):
+                doc_hits.append(c.strip())
 
+        # take top 2 matches per doc to ensure coverage
+        if doc_hits:
+            results.extend(doc_hits[:2])
+
+    if not results:
+        return JSONResponse({"chunks": []})
+
+    # limit total to top 6–8 to stay concise
+    return JSONResponse({"chunks": results[:8]})
